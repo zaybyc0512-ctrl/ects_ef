@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { TRAINING_CATEGORIES } from '../lib/constants';
 import { DEFAULT_PLAYER_ID } from '../lib/playerData';
-
-// We import TargetStat type but used implicitly in Record<string, {value: number, priority: number}>
 import { TargetStat } from '../components/TargetSettingsModal';
 
 const DEBOUNCE_MS = 500;
@@ -42,14 +40,15 @@ export function useSimulatorUrl() {
 
     const getInitialPoints = (prefix: string) => {
         const val = searchParams.get(`${prefix}_pp`);
-        return val ? parseInt(val, 10) : 80; // Default 80
+        return val ? parseInt(val, 10) : 80;
     };
 
-    const getInitialPlayerId = () => {
-        return searchParams.get('pid') || DEFAULT_PLAYER_ID;
+    // New Player ID Logic
+    const getInitialPlayerId = (key: string) => {
+        // Try specific key (pidA), then legacy (pid), then default
+        return searchParams.get(key) || searchParams.get('pid') || DEFAULT_PLAYER_ID;
     }
 
-    // Target Stats Parsing: tgt=Speed:90:1|Accel:85:2
     const getInitialTargets = () => {
         const raw = searchParams.get('tgt');
         if (!raw) return {};
@@ -66,7 +65,8 @@ export function useSimulatorUrl() {
 
 
     // --- State ---
-    const [playerId, setPlayerId] = useState(() => getInitialPlayerId());
+    const [playerIdA, setPlayerIdA] = useState(() => getInitialPlayerId('pidA'));
+    const [playerIdB, setPlayerIdB] = useState(() => getInitialPlayerId('pidB'));
 
     // Targets
     const [targetStats, setTargetStats] = useState<Record<string, TargetStat>>(() => getInitialTargets());
@@ -97,9 +97,10 @@ export function useSimulatorUrl() {
         const handler = setTimeout(() => {
             const params = new URLSearchParams();
 
-            params.set('pid', playerId);
+            // Sync A/B separately. 'pid' is legacy and not written anymore.
+            params.set('pidA', playerIdA);
+            params.set('pidB', playerIdB);
 
-            // Serialize Targets
             if (Object.keys(targetStats).length > 0) {
                 const tgtStr = Object.entries(targetStats)
                     .map(([stat, t]) => `${stat}:${t.value}:${t.priority}`)
@@ -118,24 +119,19 @@ export function useSimulatorUrl() {
                 craft: string,
                 pp: number
             ) => {
-                // Levels
                 Object.entries(levels).forEach(([cat, val]) => {
                     if (val > 0) params.set(`${prefix}_${cat}`, val.toString());
                 });
-                // Manager
                 if (man > 0) params.set(`${prefix}_man`, man.toString());
                 if (manB1) params.set(`${prefix}_man_b1`, manB1);
                 if (manB2) params.set(`${prefix}_man_b2`, manB2);
 
-                // Booster
                 if (boost !== 'NONE') {
                     params.set(`${prefix}_boost`, boost);
                     if (boostLv !== 1) params.set(`${prefix}_boost_lv`, boostLv.toString());
                 }
-                // Crafted
                 if (craft !== 'NONE') params.set(`${prefix}_craft`, craft);
 
-                // Points
                 params.set(`${prefix}_pp`, pp.toString());
             };
 
@@ -148,7 +144,7 @@ export function useSimulatorUrl() {
 
         return () => clearTimeout(handler);
     }, [
-        playerId, targetStats,
+        playerIdA, playerIdB, targetStats,
         levelsA, levelsB,
         managerA, managerB, manBoost1A, manBoost2A, manBoost1B, manBoost2B,
         boosterA, boosterB, boosterLvA, boosterLvB,
@@ -167,7 +163,8 @@ export function useSimulatorUrl() {
     }, []);
 
     return {
-        playerId, setPlayerId,
+        playerIdA, setPlayerIdA,
+        playerIdB, setPlayerIdB,
         targetStats, setTargetStats,
 
         levelsA, setLevelsA,

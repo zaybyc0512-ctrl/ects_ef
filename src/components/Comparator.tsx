@@ -14,7 +14,8 @@ import { solveAllocation } from '../lib/solver';
 
 export default function Comparator() {
     const {
-        playerId, setPlayerId,
+        playerIdA, setPlayerIdA,
+        playerIdB, setPlayerIdB,
         targetStats, setTargetStats,
 
         levelsA, setLevelsA, managerA, setManagerA,
@@ -34,24 +35,32 @@ export default function Comparator() {
     const [activeCategory, setActiveCategory] = useState<string>('Shooting');
     const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
 
-    // Load player data
-    const selectedPlayer = useMemo(() => getPlayerById(playerId) || getPlayerById(DEFAULT_PLAYER_ID)!, [playerId]);
+    // Load player data - Independent
+    const playerA = useMemo(() => getPlayerById(playerIdA) || getPlayerById(DEFAULT_PLAYER_ID)!, [playerIdA]);
+    const playerB = useMemo(() => getPlayerById(playerIdB) || getPlayerById(DEFAULT_PLAYER_ID)!, [playerIdB]);
 
-    // Handle Player Switch
-    const handlePlayerSelect = (newPid: string) => {
-        const newPlayer = getPlayerById(newPid);
-        if (!newPlayer) return;
-
-        setPlayerId(newPid);
+    // Handle Player Switch Logic
+    const handlePlayerChangeA = (newPid: string) => {
+        const p = getPlayerById(newPid);
+        if (!p) return;
+        setPlayerIdA(newPid);
+        // Reset A
         setLevelsA({});
-        setLevelsB({});
-        setAvailablePointsA(newPlayer.totalPoints);
-        setAvailablePointsB(newPlayer.totalPoints);
-        const defBooster = newPlayer.fixedBooster || 'NONE';
-        setBoosterA(defBooster);
-        setBoosterB(defBooster);
-        setTargetStats({});
+        setAvailablePointsA(p.totalPoints);
+        setBoosterA(p.fixedBooster || 'NONE');
+        // No target reset needed as targets are global logic
     };
+
+    const handlePlayerChangeB = (newPid: string) => {
+        const p = getPlayerById(newPid);
+        if (!p) return;
+        setPlayerIdB(newPid);
+        // Reset B
+        setLevelsB({});
+        setAvailablePointsB(p.totalPoints);
+        setBoosterB(p.fixedBooster || 'NONE');
+    };
+
 
     const handleLevelChange = (
         setter: React.Dispatch<React.SetStateAction<Record<string, number>>>,
@@ -65,10 +74,10 @@ export default function Comparator() {
         });
     };
 
-    // Solver Handler
+    // Solver Handler - Uses respective player
     const handleAutoAllocate = (isBuildA: boolean) => {
         const result = solveAllocation(
-            selectedPlayer,
+            isBuildA ? playerA : playerB,
             isBuildA ? managerA : managerB,
             isBuildA ? boosterA : boosterB,
             isBuildA ? boosterLvA : boosterLvB,
@@ -83,7 +92,7 @@ export default function Comparator() {
     };
 
     const handleResetLevels = (isBuildA: boolean) => {
-        if (confirm(`Reset training levels for Build ${isBuildA ? 'A' : 'B'}?`)) {
+        if (confirm(`Reset training levels for Build ${isBuildA ? 'A' : 'B'} (${isBuildA ? playerA.name : playerB.name})?`)) {
             if (isBuildA) setLevelsA({});
             else setLevelsB({});
         }
@@ -100,14 +109,15 @@ export default function Comparator() {
     const managerBoostStatsA = useMemo(() => [manBoost1A, manBoost2A].filter(Boolean), [manBoost1A, manBoost2A]);
     const managerBoostStatsB = useMemo(() => [manBoost1B, manBoost2B].filter(Boolean), [manBoost1B, manBoost2B]);
 
+    // Calculate using respective players
     const statsA = useMemo(() =>
-        calculateStats(selectedPlayer.initialStats, levelsA, managerA, boosterA, boosterLvA, managerBoostStatsA, craftedA),
-        [selectedPlayer, levelsA, managerA, boosterA, boosterLvA, managerBoostStatsA, craftedA]
+        calculateStats(playerA.initialStats, levelsA, managerA, boosterA, boosterLvA, managerBoostStatsA, craftedA),
+        [playerA, levelsA, managerA, boosterA, boosterLvA, managerBoostStatsA, craftedA]
     );
 
     const statsB = useMemo(() =>
-        calculateStats(selectedPlayer.initialStats, levelsB, managerB, boosterB, boosterLvB, managerBoostStatsB, craftedB),
-        [selectedPlayer, levelsB, managerB, boosterB, boosterLvB, managerBoostStatsB, craftedB]
+        calculateStats(playerB.initialStats, levelsB, managerB, boosterB, boosterLvB, managerBoostStatsB, craftedB),
+        [playerB, levelsB, managerB, boosterB, boosterLvB, managerBoostStatsB, craftedB]
     );
 
     const statKeys = Object.keys(statsA);
@@ -150,9 +160,9 @@ export default function Comparator() {
             <div className="mb-4 flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-700 pb-4">
                     <div>
-                        <h1 className="text-3xl font-black text-white">{selectedPlayer.name}</h1>
-                        <p className="text-slate-400 text-sm mt-1">
-                            {selectedPlayer.team} | {selectedPlayer.position} | Total Points: {selectedPlayer.totalPoints}
+                        <h1 className="text-2xl font-black text-white">eFootball Build Simulator</h1>
+                        <p className="text-slate-400 text-xs mt-1">
+                            Compare builds across different players or variations.
                         </p>
                     </div>
 
@@ -178,12 +188,15 @@ export default function Comparator() {
                     </div>
                 </div>
 
-                <PlayerSelector selectedPlayerId={playerId} onPlayerSelect={handlePlayerSelect} />
+                {/* Global Player Selector Removed - Now inside Config Areas */}
             </div>
 
             {/* 2. Config Areas */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+
+                {/* BUILD A */}
                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md relative group/panel">
+                    {/* Auto & Reset Buttons */}
                     <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
                         <button
                             onClick={() => handleAutoAllocate(true)}
@@ -200,6 +213,16 @@ export default function Comparator() {
                             🗑️
                         </button>
                     </div>
+
+                    {/* Player A Selector */}
+                    <div className="mb-4 pr-24">
+                        <p className="text-xs font-bold text-cyan-400 mb-1">PLAYER A</p>
+                        <PlayerSelector selectedPlayerId={playerIdA} onPlayerSelect={handlePlayerChangeA} />
+                        <p className="text-xs text-slate-400 mt-1">{playerA.team} | {playerA.position}</p>
+                    </div>
+
+                    <hr className="border-slate-700 my-4" />
+
                     <TrainingControls
                         allocatedLevels={levelsA}
                         onLevelChange={(c, d) => handleLevelChange(setLevelsA, c, d)}
@@ -213,7 +236,10 @@ export default function Comparator() {
                         title="Build A Config" colorClass="border-cyan-500" showCategoryList={false}
                     />
                 </div>
+
+                {/* BUILD B */}
                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-md relative group/panel">
+                    {/* Auto & Reset Buttons */}
                     <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
                         <button
                             onClick={() => handleAutoAllocate(false)}
@@ -230,6 +256,16 @@ export default function Comparator() {
                             🗑️
                         </button>
                     </div>
+
+                    {/* Player B Selector */}
+                    <div className="mb-4 pr-24">
+                        <p className="text-xs font-bold text-red-400 mb-1">PLAYER B</p>
+                        <PlayerSelector selectedPlayerId={playerIdB} onPlayerSelect={handlePlayerChangeB} />
+                        <p className="text-xs text-slate-400 mt-1">{playerB.team} | {playerB.position}</p>
+                    </div>
+
+                    <hr className="border-slate-700 my-4" />
+
                     <TrainingControls
                         allocatedLevels={levelsB}
                         onLevelChange={(c, d) => handleLevelChange(setLevelsB, c, d)}
@@ -249,9 +285,9 @@ export default function Comparator() {
             <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-2xl">
                 <div className="bg-slate-950 px-4 py-3 border-b border-slate-700 grid grid-cols-4 text-sm font-bold text-slate-400 uppercase tracking-wider sticky top-0 z-10">
                     <div className="text-left">Stat</div>
-                    <div className="text-center text-cyan-400">Value A</div>
+                    <div className="text-center text-cyan-400">{playerA.name}</div>
                     <div className="text-center">Diff</div>
-                    <div className="text-center text-red-400">Value B</div>
+                    <div className="text-center text-red-400">{playerB.name}</div>
                 </div>
 
                 <div className="divide-y divide-slate-700/50">
